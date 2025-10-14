@@ -7,7 +7,7 @@ import {
   logoutUser,
 } from "../controllers/authController.js";
 import { verifyJWT } from "../middleware/authMiddleware.js";
-import { verifyEmail } from "../controllers/verifyEmail.js"
+import { verifyEmail } from "../controllers/verifyController.js"
 import { requestPasswordReset, resetPassword } from "../controllers/passwordController.js"
 
 const router = express.Router();

@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["user", "admin", "superadmin"],
+      enum: ["user", "admin"],
       default: "user",
     },
 
@@ -64,7 +64,10 @@ const userSchema = new mongoose.Schema(
       enum: ["credentials", "google", "github"],
       default: "credentials",
     },
-
+    refreshToken: {
+      type: String,
+      select: false,
+    },
     lastLogin: Date,
     isDeleted: {
       type: Boolean,

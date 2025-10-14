@@ -1,6 +1,6 @@
 // controllers/authController.js
 import User from "../models/User.js";
-import Token from "../models/Token.js";
+import  connectDB  from "../config/db.js";
 import jwt from "jsonwebtoken";
 import { getRedisClient } from "../config/redis.js"; // ensure this exports an ioredis client
 import asyncHandler from "express-async-handler";
@@ -46,70 +46,72 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, avatar, role } = req.body;
+  console.log(name,email, password, avatar, role)
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: "Name, email and password are required" });
   }
-
+  await connectDB()
   // basic normalization
   const normalizedEmail = String(email).toLowerCase().trim();
+  console.log(email)
 
   const exists = await User.findOne({ email: normalizedEmail });
   if (exists) return res.status(409).json({ message: "Email already exists" });
 
-  const user = await User.create({
-    name,
-    email: normalizedEmail,
-    password, // model pre-save will hash
-    avatar : avatar,
-    role: role ,
-    provider: "credentials",
-  });
+  // const user = await User.create({
+  //   name,
+  //   email: normalizedEmail,
+  //   password, // model pre-save will hash
+  //   avatar : avatar,
+  //   role: role ,
+  //   provider: "credentials",
+  // });
 
   // Generate email verification token
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
+  // const token = crypto.randomBytes(32).toString("hex");
+  // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
 
-  await Token.create({
-    userId: user._id,
-    token,
-    type: "emailVerification",
-    expiresAt,
-  });
+  // await Token.create({
+  //   userId: user._id,
+  //   token,
+  //   type: "emailVerification",
+  //   expiresAt,
+  // });
 
-  const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?uid=${user._id}&token=${token}`
+  // const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?uid=${user._id}&token=${token}`
 
-  await resend.emails.send({
-    from: "no-reply@eng.tuhin77@gmail.com",
-    to: user.email,
-    subject: "Verify your email",
-    html: `<p>Hi ${user.name},</p>
-           <p>Click the link below to verify your email:</p>
-           <a href="${verificationUrl}">Verify Email</a>
-           <p>This link expires in 24 hours.</p>`,
-  });
+  // await resend.emails.send({
+  //   from: "no-reply@eng.tuhin77@gmail.com",
+  //   to: user.email,
+  //   subject: "Verify your email",
+  //   html: `<p>Hi ${user.name},</p>
+  //          <p>Click the link below to verify your email:</p>
+  //          <a href="${verificationUrl}">Verify Email</a>
+  //          <p>This link expires in 24 hours.</p>`,
+  // });
 
 
   // cookie settings
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: "/",
-  };
+  // const cookieOptions = {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   maxAge: 7 * 24 * 60 * 60 * 1000,
+  //   path: "/",
+  // };
 
-  res.cookie("refreshToken", refreshToken, cookieOptions);
+  //res.cookie("refreshToken", refreshToken, cookieOptions);
   // hide sensitive fields in response
-  const safeUser = {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    avatar: user.avatar,
-  };
+  // const safeUser = {
+  //   id: user._id,
+  //   name: user.name,
+  //   email: user.email,
+  //   role: user.role,
+  //   avatar: user.avatar,
+  // };
 
-  return res.status(201).json({ message: "User registered", user: safeUser, accessToken });
+  // return res.status(201).json({ message: "User registered", user: safeUser, accessToken });
 });
 
 /**
