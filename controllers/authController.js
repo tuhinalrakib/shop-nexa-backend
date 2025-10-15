@@ -1,8 +1,10 @@
 // controllers/authController.js
 import User from "../models/User.js";
-import  connectDB  from "../config/db.js";
+import connectDB from "../config/db.js";
+import Token from "../models/Token.js"
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { getRedisClient } from "../config/redis.js"; // ensure this exports an ioredis client
+import { getRedisClient } from "../config/redis.js";
 import asyncHandler from "express-async-handler";
 import { Resend } from "resend";
 import dotenv from "dotenv";
@@ -32,11 +34,13 @@ const createRefreshToken = (user) => {
  */
 const storeRefreshToken = async (token, userId, ttlSeconds = 7 * 24 * 60 * 60) => {
   // store token => userId
-  await getRedisClient.set(`refresh:${token}`, userId, "EX", ttlSeconds);
+  const redis = getRedisClient()
+  await redis.set(`refresh:${token}`, userId, "EX", ttlSeconds);
 };
 
 const removeRefreshToken = async (token) => {
-  await getRedisClient.del(`refresh:${token}`);
+  const redis = getRedisClient()
+  await redis.del(`refresh:${token}`);
 };
 
 /**
@@ -44,9 +48,10 @@ const removeRefreshToken = async (token) => {
  */
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+/*======================Regsiter Account==============================*/
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, avatar, role } = req.body;
-  console.log(name,email, password, avatar, role)
+  console.log(name, email, password, avatar, role)
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: "Name, email and password are required" });
@@ -59,59 +64,69 @@ export const registerUser = asyncHandler(async (req, res) => {
   const exists = await User.findOne({ email: normalizedEmail });
   if (exists) return res.status(409).json({ message: "Email already exists" });
 
-  // const user = await User.create({
-  //   name,
-  //   email: normalizedEmail,
-  //   password, // model pre-save will hash
-  //   avatar : avatar,
-  //   role: role ,
-  //   provider: "credentials",
-  // });
+  const user = await User.create({
+    name,
+    email: normalizedEmail,
+    password, // model pre-save will hash
+    avatar: avatar,
+    role: role,
+    provider: "credentials",
+  });
 
   // Generate email verification token
-  // const token = crypto.randomBytes(32).toString("hex");
-  // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
 
-  // await Token.create({
-  //   userId: user._id,
-  //   token,
-  //   type: "emailVerification",
-  //   expiresAt,
-  // });
+  await Token.create({
+    userId: user._id,
+    token,
+    type: "emailVerification",
+    expiresAt,
+  });
 
-  // const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?uid=${user._id}&token=${token}`
+  const verificationUrl = `${process.env.NEXTAUTH_URL}/verify-email?uid=${user._id}&token=${token}`
 
-  // await resend.emails.send({
-  //   from: "no-reply@eng.tuhin77@gmail.com",
-  //   to: user.email,
-  //   subject: "Verify your email",
-  //   html: `<p>Hi ${user.name},</p>
-  //          <p>Click the link below to verify your email:</p>
-  //          <a href="${verificationUrl}">Verify Email</a>
-  //          <p>This link expires in 24 hours.</p>`,
-  // });
+  await resend.emails.send({
+    from: "no-reply@eng.tuhin77@gmail.com",
+    to: user.email,
+    subject: "Verify your email",
+    html: `<p>Hi ${user.name},</p>
+           <p>Click the link below to verify your email:</p>
+           <a href="${verificationUrl}">Verify Email</a>
+           <p>This link expires in 24 hours.</p>`,
+  });
 
 
   // cookie settings
-  // const cookieOptions = {
-  //   httpOnly: true,
-  //   secure: process.env.NODE_ENV === "production",
-  //   sameSite: "lax",
-  //   maxAge: 7 * 24 * 60 * 60 * 1000,
-  //   path: "/",
-  // };
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  };
 
-  //res.cookie("refreshToken", refreshToken, cookieOptions);
+  // Create tokens
+  const accessToken = createAccessToken(user);
+  const refreshToken = createRefreshToken(user);
+
+  // Store refresh token in Redis
+  await storeRefreshToken(refreshToken, user._id.toString());
+
+  // Set cookie
+  res.cookie("refreshToken", refreshToken, cookieOptions);
+
+
   // hide sensitive fields in response
-  // const safeUser = {
-  //   id: user._id,
-  //   name: user.name,
-  //   email: user.email,
-  //   role: user.role,
-  //   avatar: user.avatar,
-  // };
+  const safeUser = {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar,
+  };
 
-  // return res.status(201).json({ message: "User registered", user: safeUser, accessToken });
+  return res.status(201).json({ message: "User registered", user: safeUser, accessToken });
 });
 
 /**
@@ -191,7 +206,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
     payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
   } catch (err) {
     // invalid token
-    await removeRefreshToken(token).catch(() => {});
+    await removeRefreshToken(token).catch(() => { });
     return res.status(403).json({ message: "Invalid refresh token" });
   }
 
@@ -199,7 +214,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
   const storedUserId = await getRedisClient.get(`refresh:${token}`);
   if (!storedUserId || storedUserId !== payload.id) {
     // token not found or mismatched -> possible revoke
-    await removeRefreshToken(token).catch(() => {});
+    await removeRefreshToken(token).catch(() => { });
     return res.status(403).json({ message: "Refresh token revoked" });
   }
 
@@ -232,7 +247,7 @@ export const logoutUser = asyncHandler(async (req, res) => {
   const cookies = req.cookies || {};
   const token = cookies.refreshToken;
   if (token) {
-    await removeRefreshToken(token).catch(() => {});
+    await removeRefreshToken(token).catch(() => { });
   }
 
   res.clearCookie("refreshToken", {
