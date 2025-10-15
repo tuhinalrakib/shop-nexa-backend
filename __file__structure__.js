@@ -55,9 +55,12 @@
 PORT=4000
 MONGO_URI = mongodb+srv://hosting:AfxYo6dkUw7pTn8p@cluster.gnlwsvv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster
 REDIS_URL = redis://127.0.0.1:6379
-JWT_SECRET = yshshshshjsdhisasbjhasdjhasdjkasdhjsd
+# JWT SECRET
+JWT_ACCESS_SECRET = yshshshshjsdhisasbjhasdjhasdjkasdhjsd
+JWT_REFRESH_SECRET = sgdhsghsgdysdhasgyuasasdgyasdyuasd
 RATE_LIMIT_WINDOW_MS = 60000
 RATE_LIMIT_MAX= 100
 RESEND_API_KEY= re_YQBPPEmD_6hm4uuqwxv1pB9qpVFg5aX9T
 NEXTAUTH_URL = http://localhost:4000/api/auth
+
  */
