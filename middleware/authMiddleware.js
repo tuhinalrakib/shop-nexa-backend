@@ -3,25 +3,25 @@ import User from "../models/User.js";
 import logger from "../utils/logger.js";
 
 // ✅ Verify JWT (used for backend-issued tokens)
+
 export const verifyJWT = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || req.cookies.token;
-    if (!authHeader) {
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.cookies?.refreshToken) {
+      // refresh token shouldn't be used to access protected routes - prefer Authorization header
+      return res.status(401).json({ success: false, message: "Use access token" });
+    } else {
       return res.status(401).json({ success: false, message: "No token provided" });
     }
 
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.split(" ")[1]
-      : authHeader;
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Attach user data to request
-    req.user = decoded;
-
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    req.user = decoded; // contains { id, role, iat, exp }
     next();
   } catch (error) {
-    logger.error(`JWT Auth Error: ${error.message}`);
+    logger?.error?.(`JWT Auth Error: ${error.message}`);
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
 };
